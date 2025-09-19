@@ -1,0 +1,488 @@
+//Jogador.java
+
+package com.exercicio.model;
+
+public class Jogador {
+    private String nome;
+    private String posicao;
+    private int idade;
+
+    public Jogador(String nome, String posicao, int idade) {
+        this.nome = nome;
+        this.posicao = posicao;
+        this.idade = idade;
+    }
+
+}
+
+//TimeService.java:
+
+package com.exercicio.service;
+
+import com.exercicio.model.Jogador;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+public class TimeService {
+
+    private List<Jogador> jogadores;
+
+    public TimeService() {
+        jogadores = new ArrayList<>();
+
+        
+        for (int i = 1; i <= 11; i++) {
+            jogadores.add(new Jogador("Titular " + i, "Posição " + i, 20 + i));
+        }
+
+      
+        for (int i = 12; i <= 16; i++) {
+            jogadores.add(new Jogador("Reserva " + i, "Posição " + i, 20 + i));
+        }
+    }
+
+    public List<Jogador> getTitulares() {
+        return jogadores.subList(0, 11);
+    }
+
+    public List<Jogador> getReservas() {
+        return jogadores.subList(11, jogadores.size());
+    }
+
+    public boolean substituirJogador(int posicaoTitular, int posicaoReserva) {
+        if (posicaoTitular >= 0 && posicaoTitular < 11 && posicaoReserva >= 11 && posicaoReserva < jogadores.size()) {
+            Jogador reserva = jogadores.get(posicaoReserva);
+            jogadores.set(posicaoReserva, jogadores.get(posicaoTitular));
+            jogadores.set(posicaoTitular, reserva);
+            return true;
+        }
+        return false;
+    }
+}
+
+TimeController.java:
+
+package com.exercicio.controller;
+
+import com.exercicio.model.Jogador;
+import com.exercicio.service.TimeService;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+public class TimeController {
+
+    private final TimeService service;
+
+    public TimeController(TimeService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/principal")
+    public List<Jogador> getTitulares() {
+        return service.getTitulares();
+    }
+
+    @GetMapping("/reservas")
+    public List<Jogador> getReservas() {
+        return service.getReservas();
+    }
+
+    @PutMapping("/jogador/{posicao}")
+    public String substituir(@PathVariable int posicao, @RequestParam int reserva) {
+        boolean resultado = service.substituirJogador(posicao, reserva);
+        return resultado ? "Substituição feita com sucesso." : "Substituição inválida.";
+    }
+}
+
+//Exercício 2 – Biblioteca /////////////////////////////////////////////////////////////////////////////////
+//Livro.java
+package com.exercicio.model;
+
+import java.util.UUID;
+
+public class Livro {
+    private UUID id;
+    private String titulo;
+    private String autor;
+
+    public Livro(String titulo, String autor) {
+        this.id = UUID.randomUUID();
+        this.titulo = titulo;
+        this.autor = autor;
+    }
+
+
+}
+//Emprestimo.java
+
+package com.exercicio.model;
+
+import java.time.LocalDate;
+import java.util.UUID;
+
+public class Emprestimo {
+    private UUID emprestimoId;
+    private UUID livroId;
+    private String usuarioId;
+    private LocalDate dataEmprestimo;
+
+    public Emprestimo(UUID livroId, String usuarioId) {
+        this.emprestimoId = UUID.randomUUID();
+        this.livroId = livroId;
+        this.usuarioId = usuarioId;
+        this.dataEmprestimo = LocalDate.now();
+    }
+
+  
+}
+
+//BibliotecaService.java
+package com.exercicio.service;
+
+import com.exercicio.model.Emprestimo;
+import com.exercicio.model.Livro;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+
+@Service
+public class BibliotecaService {
+
+    private final Map<UUID, Livro> livrosDisponiveis = new HashMap<>();
+    private final Map<UUID, Emprestimo> emprestimosAtivos = new HashMap<>();
+
+    public BibliotecaService() {
+      
+        Livro l1 = new Livro("Dom Casmurro", "Machado de Assis");
+        Livro l2 = new Livro("O Pequeno Príncipe", "Antoine de Saint-Exupéry");
+        Livro l3 = new Livro("1984", "George Orwell");
+
+        livrosDisponiveis.put(l1.getId(), l1);
+        livrosDisponiveis.put(l2.getId(), l2);
+        livrosDisponiveis.put(l3.getId(), l3);
+    }
+
+    public Collection<Livro> getLivrosDisponiveis() {
+        return livrosDisponiveis.values();
+    }
+
+    public Collection<Emprestimo> getEmprestimosAtivos() {
+        return emprestimosAtivos.values();
+    }
+
+    public Optional<Emprestimo> criarEmprestimo(UUID livroId, String usuarioId) {
+        Livro livro = livrosDisponiveis.get(livroId);
+        if (livro == null) {
+            return Optional.empty(); // livro não disponível
+        }
+
+        Emprestimo novo = new Emprestimo(livroId, usuarioId);
+        emprestimosAtivos.put(novo.getEmprestimoId(), novo);
+        livrosDisponiveis.remove(livroId); // remove dos disponíveis
+        return Optional.of(novo);
+    }
+
+    public boolean devolverEmprestimo(UUID emprestimoId) {
+        Emprestimo e = emprestimosAtivos.remove(emprestimoId);
+        if (e != null) {
+            // devolve livro para disponível
+            Livro livro = new Livro("Título Desconhecido", "Autor Desconhecido"); // ideal pegar info real do livro
+            livro = getLivroByIdOriginal(e.getLivroId());
+            livrosDisponiveis.put(e.getLivroId(), livro);
+            return true;
+        }
+        return false;
+    }
+
+    private Livro getLivroByIdOriginal(UUID id) {
+       
+        return new Livro("Livro recuperado", "Autor recuperado"); 
+    }
+}
+
+//Controller: BibliotecaController.java
+package com.exercicio.controller;
+
+import com.exercicio.model.Emprestimo;
+import com.exercicio.model.Livro;
+import com.exercicio.service.BibliotecaService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Collection;
+import java.util.Optional;
+import java.util.UUID;
+
+@RestController
+public class BibliotecaController {
+
+    private final BibliotecaService service;
+
+    public BibliotecaController(BibliotecaService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/livros")
+    public Collection<Livro> listarLivrosDisponiveis() {
+        return service.getLivrosDisponiveis();
+    }
+
+    @GetMapping("/emprestados")
+    public Collection<Emprestimo> listarEmprestimos() {
+        return service.getEmprestimosAtivos();
+    }
+
+    @PostMapping("/emprestados")
+    public ResponseEntity<?> criarEmprestimo(@RequestParam UUID livroId, @RequestParam String usuarioId) {
+        Optional<Emprestimo> emprestimo = service.criarEmprestimo(livroId, usuarioId);
+        if (emprestimo.isPresent()) {
+            return ResponseEntity.ok(emprestimo.get());
+        } else {
+            return ResponseEntity.badRequest().body("Livro não disponível para empréstimo.");
+        }
+    }
+
+    @DeleteMapping("/emprestados/{emprestimoId}")
+    public ResponseEntity<?> devolverLivro(@PathVariable UUID emprestimoId) {
+        boolean sucesso = service.devolverEmprestimo(emprestimoId);
+        if (sucesso) {
+            return ResponseEntity.ok("Livro devolvido com sucesso.");
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
+
+//Exercício 3 – Usuários e Tweets////////////////////////////////////////////////////////////////////
+//Usuario.java
+package com.exercicio.model;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class Usuario {
+    private UUID id;
+    private String nome;
+    private String email;
+    private List<Tweet> tweets = new ArrayList<>();
+
+    public Usuario(String nome, String email) {
+        this.id = UUID.randomUUID();
+        this.nome = nome;
+        this.email = email;
+    }
+
+    public void adicionarTweet(Tweet tweet) {
+        tweets.add(tweet);
+    }
+
+
+}
+
+///Tweet.java
+package com.exercicio.model;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public class Tweet {
+    private UUID tweetId;
+    private String mensagem;
+    private boolean editado;
+    private LocalDateTime dataCriacao;
+
+    public Tweet(String mensagem) {
+        this.tweetId = UUID.randomUUID();
+        this.mensagem = mensagem;
+        this.editado = false;
+        this.dataCriacao = LocalDateTime.now();
+    }
+
+    
+}
+
+//UsuarioService.java
+package com.exercicio.service;
+
+import com.exercicio.model.Tweet;
+import com.exercicio.model.Usuario;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+@Service
+public class UsuarioService {
+
+    private final Map<UUID, Usuario> usuarios = new HashMap<>();
+
+    public UsuarioService() {
+       
+        Usuario u1 = new Usuario("Alice", "alice@email.com");
+        Usuario u2 = new Usuario("Bob", "bob@email.com");
+        usuarios.put(u1.getId(), u1);
+        usuarios.put(u2.getId(), u2);
+    }
+
+    public Collection<Usuario> getUsuarios() {
+        return usuarios.values();
+    }
+
+    public Optional<Usuario> getUsuario(UUID id) {
+        return Optional.ofNullable(usuarios.get(id));
+    }
+
+    public List<Tweet> getTweets(UUID usuarioId) {
+        Usuario u = usuarios.get(usuarioId);
+        return (u != null) ? u.getTweets() : Collections.emptyList();
+    }
+
+    public Optional<Tweet> criarTweet(UUID usuarioId, String mensagem) {
+        Usuario u = usuarios.get(usuarioId);
+        if (u == null) return Optional.empty();
+
+        Tweet tweet = new Tweet(mensagem);
+        u.adicionarTweet(tweet);
+        return Optional.of(tweet);
+    }
+
+    public boolean atualizarTweet(UUID usuarioId, UUID tweetId, String novaMensagem) {
+        Usuario u = usuarios.get(usuarioId);
+        if (u == null) return false;
+
+        for (Tweet t : u.getTweets()) {
+            if (t.getTweetId().equals(tweetId)) {
+                t.setMensagem(novaMensagem);
+                t.setEditado(true);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean removerTweet(UUID usuarioId, UUID tweetId) {
+        Usuario u = usuarios.get(usuarioId);
+        if (u == null) return false;
+
+        return u.getTweets().removeIf(t -> t.getTweetId().equals(tweetId));
+    }
+}
+
+// UsuarioController.java
+package com.exercicio.controller;
+
+import com.exercicio.model.Tweet;
+import com.exercicio.model.Usuario;
+import com.exercicio.service.UsuarioService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/usuarios")
+public class UsuarioController {
+
+    private final UsuarioService service;
+
+    public UsuarioController(UsuarioService service) {
+        this.service = service;
+    }
+
+    @GetMapping
+    public Collection<Usuario> listarUsuarios() {
+        return service.getUsuarios();
+    }
+
+    @GetMapping("/{id}/tweets")
+    public ResponseEntity<List<Tweet>> listarTweets(@PathVariable UUID id) {
+        Optional<Usuario> usuario = service.getUsuario(id);
+        return usuario.map(value -> ResponseEntity.ok(service.getTweets(id)))
+                      .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{id}/tweets")
+    public ResponseEntity<?> criarTweet(@PathVariable UUID id, @RequestParam String mensagem) {
+        Optional<Tweet> tweet = service.criarTweet(id, mensagem);
+        return tweet.map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/tweets/{tweetId}")
+    public ResponseEntity<?> atualizarTweet(
+            @PathVariable UUID id,
+            @PathVariable UUID tweetId,
+            @RequestParam String mensagem) {
+        boolean atualizado = service.atualizarTweet(id, tweetId, mensagem);
+        if (atualizado) return ResponseEntity.ok("Tweet atualizado");
+        else return ResponseEntity.notFound().build();
+    }
+
+    @DeleteMapping("/{id}/tweets/{tweetId}")
+    public ResponseEntity<?> deletarTweet(@PathVariable UUID id, @PathVariable UUID tweetId) {
+        boolean removido = service.removerTweet(id, tweetId);
+        if (removido) return ResponseEntity.ok("Tweet removido");
+        else return ResponseEntity.notFound().build();
+    }
+}
+
+
+//Exercício 4 – Cinema////////////////////////////////////////////////
+//Filme.java
+package com.exercicio.model;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+public class Filme {
+    private UUID id;
+    private String titulo;
+    private String genero;
+    private int capacidade;
+    private int assentosOcupados = 0;
+    private List<Ingresso> ingressos = new ArrayList<>();
+
+    public Filme(String titulo, String genero, int capacidade) {
+        this.id = UUID.randomUUID();
+        this.titulo = titulo;
+        this.genero = genero;
+        this.capacidade = capacidade;
+    }
+
+    
+}
+
+// Ingresso.java
+package com.exercicio.model;
+
+import java.util.UUID;
+
+public class Ingresso {
+    private UUID ingressoId;
+    private UUID filmeId;
+    private int assentoNumero;
+
+    public Ingresso(UUID filmeId, int assentoNumero) {
+        this.ingressoId = UUID.randomUUID();
+        this.filmeId = filmeId;
+        this.assentoNumero = assentoNumero;
+    }
+
+
+}
+
+
+
+
+
+
