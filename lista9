@@ -1,1 +1,133 @@
 
+package com.exemplo.fipe;
+
+public class CarroRequest {
+    private String marca;
+    private String modelo;
+    private Integer ano;
+
+    public String getMarca() {
+        return marca;
+    }
+
+    public void setMarca(String marca) {
+        this.marca = marca;
+    }
+
+    public String getModelo() {
+        return modelo;
+    }
+
+    public void setModelo(String modelo) {
+        this.modelo = modelo;
+    }
+
+    public Integer getAno() {
+        return ano;
+    }
+
+    public void setAno(Integer ano) {
+        this.ano = ano;
+    }
+}
+
+package com.exemplo.fipe;
+
+public class FipeResponse {
+
+    private double valor;
+    private String mes;
+
+    public FipeResponse(double valor, String mes) {
+        this.valor = valor;
+        this.mes = mes;
+    }
+
+    public double getValor() {
+        return valor;
+    }
+
+    public String getMes() {
+        return mes;
+    }
+}
+
+package com.exemplo.fipe;
+
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestClient;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/fipe")
+public class FipeController {
+
+    private final RestClient client = RestClient.create();
+
+    @PostMapping
+    public FipeResponse consultarValor(@RequestBody CarroRequest req) {
+
+        // 1 — Buscar marcas
+        var marcas = client.get()
+                .uri("https://parallelum.com.br/fipe/api/v1/carros/marcas")
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+
+        String codMarca = marcas.stream()
+                .filter(m -> m.get("nome").toString().equalsIgnoreCase(req.getMarca()))
+                .findFirst()
+                .orElseThrow()
+                .get("codigo").toString();
+
+        // 2 — Buscar modelos
+        var modelos = client.get()
+                .uri("https://parallelum.com.br/fipe/api/v1/carros/marcas/{marca}/modelos", codMarca)
+                .retrieve()
+                .body(Map.class);
+
+        List<Map<String, Object>> listaModelos =
+                (List<Map<String, Object>>) modelos.get("modelos");
+
+        String codModelo = listaModelos.stream()
+                .filter(m -> m.get("nome").toString().equalsIgnoreCase(req.getModelo()))
+                .findFirst()
+                .orElseThrow()
+                .get("codigo").toString();
+
+        // 3 — Buscar anos
+        var anos = client.get()
+                .uri("https://parallelum.com.br/fipe/api/v1/carros/marcas/{marca}/modelos/{modelo}/anos",
+                        codMarca, codModelo)
+                .retrieve()
+                .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+
+        String codAno = anos.stream()
+                .filter(a -> a.get("nome").toString().contains(req.getAno().toString()))
+                .findFirst()
+                .orElseThrow()
+                .get("codigo").toString();
+
+        // 4 — Buscar valor final
+        Map<String, Object> valor = client.get()
+                .uri("https://parallelum.com.br/fipe/api/v1/carros/marcas/{marca}/modelos/{modelo}/anos/{ano}",
+                        codMarca, codModelo, codAno)
+                .retrieve()
+                .body(Map.class);
+
+        double preco = Double.parseDouble(
+                valor.get("Valor").toString()
+                        .replace("R$", "")
+                        .replace(".", "")
+                        .replace(",", ".")
+                        .trim()
+        );
+
+        String mes = valor.get("MesReferencia").toString();
+
+        return new FipeResponse(preco, mes);
+    }
+}
+
